@@ -1,6 +1,6 @@
 <launch>
 	
-	<arg name="bd_list" default="100000000000000"/>
+	<arg name="bd_list" default="13UUG1F00400160"/>
     <param name="livox_msg_type" value="0"/>
 
     <node name="livox_hub_publisher" pkg="livox_ros_driver" 

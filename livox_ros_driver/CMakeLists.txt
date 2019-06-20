@@ -37,47 +37,6 @@ find_package(Boost REQUIRED COMPONENTS thread)
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
 # catkin_python_setup()
 
-## make sure the livox_sdk_static library is installed
-find_library(LIVOX_SDK_LIBRARY liblivox_sdk_static.a /usr/local/lib)
-
-if((NOT LIVOX_SDK_LIBRARY) OR (NOT EXISTS ${LIVOX_SDK_LIBRARY}))
-	# couldn't find the livox sdk library
-	message("Coudn't find livox sdk library")
-
-	include_directories(
-						./
-						${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK/sdk_core/include
-						)
-	link_directories(
-						./
-						${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK/build/sdk_core
-						)
-
-	# clone livox sdk source code from github
-	execute_process(COMMAND mkdir -p ${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK OUTPUT_VARIABLE cmd_res)
-	message("Try to pull the livox sdk source code from github")
-	FOREACH(res ${cmd_res})
-		MESSAGE(${res})
-	ENDFOREACH()
-
-	execute_process(COMMAND git clone https://github.com/Livox-SDK/Livox-SDK.git ${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK)
-	FOREACH(res ${cmd_res})
-		MESSAGE(${res})
-	ENDFOREACH()
-
-	execute_process(COMMAND cmake .. WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK/build OUTPUT_VARIABLE cmd_res)
-	FOREACH(res ${cmd_res})
-		MESSAGE(${res})
-	ENDFOREACH()
-
-	execute_process(COMMAND make WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK/build OUTPUT_VARIABLE cmd_res)
-	FOREACH(res ${cmd_res})
-		MESSAGE(${res})
-	ENDFOREACH()
-
-else()
-	message("find livox sdk library success")
-endif()
 
 
 ################################################
@@ -105,8 +64,7 @@ endif()
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-add_message_files(
-    FILES
+add_message_files(FILES
 	CustomPoint.msg
 	CustomMsg.msg
 #   Message2.msg
@@ -127,8 +85,7 @@ add_message_files(
 # )
 
 ## Generate added messages and services with any dependencies listed here
-generate_messages(
-    DEPENDENCIES
+generate_messages(DEPENDENCIES
     std_msgs
  )
 
@@ -161,11 +118,8 @@ generate_messages(
 ## LIBRARIES: libraries you create in this project that dependent projects also need
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
-catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES lidar_sdk
-  CATKIN_DEPENDS roscpp rospy std_msgs message_runtime
-  DEPENDS system_lib
+catkin_package(CATKIN_DEPENDS
+	roscpp rospy std_msgs message_runtime
 )
 
 ###########
@@ -175,9 +129,8 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
-  ${catkin_INCLUDE_DIRS}
-#  ${PCL_INCLUDE_DIRS}
+	${catkin_INCLUDE_DIRS}
+	#${PCL_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -209,54 +162,126 @@ find_package(PkgConfig)
 pkg_check_modules(APR apr-1)
 if (APR_FOUND)
 	message(${APR_INCLUDE_DIRS})
-    message(${APR_LIBRARIES})
+	message(${APR_LIBRARIES})
 endif (APR_FOUND)
 
 include_directories(
-	               ./
-	               ${APR_INCLUDE_DIRS}
-	               )
-
+	./
+	${APR_INCLUDE_DIRS}
+)
 
 ## PCL library
 #link_directories(${PCL_LIBRARY_DIRS})
 #add_definitions(${PCL_DEFINITIONS})
 
-add_executable(${PROJECT_LIDAR}_node
-	${PROJECT_LIDAR_SRC})
+## make sure the livox_sdk_static library is installed
+find_library(LIVOX_SDK_LIBRARY liblivox_sdk_static.a /usr/local/lib)
 
-## Rename C++ executable without prefix
-## The above recommended prefix causes long target names, the following renames the
-## target back to the shorter version for ease of user use
-## e.g. "rosrun someones_pkg node" instead of "rosrun someones_pkg someones_pkg_node"
-# set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
+if((NOT LIVOX_SDK_LIBRARY) OR (NOT EXISTS ${LIVOX_SDK_LIBRARY}))
+	# couldn't find the livox sdk library
+	message("Coudn't find livox sdk library!")
+	message("Download Livox-SDK from github and build&install it please!")
+	message("Download Livox-SDK from github and build&install it please!")
+	message("Download Livox-SDK from github and build&install it please!")
 
-## Add cmake target dependencies of the executable
-## same as for the library above
-# add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+	message("git clone Livox-SDK from github temporarily, only for ROS distro jenkins build!")
+	
+	# clone livox sdk source code from github
+	execute_process(COMMAND rm -rf ${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK OUTPUT_VARIABLE cmd_res)
+	message("Try to pull the livox sdk source code from github")
+	FOREACH(res ${cmd_res})
+		MESSAGE(${res})
+	ENDFOREACH()
 
-## Specify libraries to link a library or executable target against
-target_link_libraries(${PROJECT_LIDAR}_node
-    livox_sdk_static.a
-	${APR_LIBRARIES}
-#    ${PCL_LIBRARIES}
-	${catkin_LIBRARIES}
-    ${Boost_LIBRARIES}
-    -lrt
-  )
+	execute_process(COMMAND git clone https://github.com/Livox-SDK/Livox-SDK.git ${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK OUTPUT_VARIABLE cmd_res)
+	FOREACH(res ${cmd_res})
+		MESSAGE(${res})
+	ENDFOREACH()
+	
+	execute_process(COMMAND cmake .. WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK/build OUTPUT_VARIABLE cmd_res)
+	FOREACH(res ${cmd_res})
+		MESSAGE(${res})
+	ENDFOREACH()
 
-## add hub project here
-add_executable(${PROJECT_HUB}_node
-	${PROJECT_HUB_SRC})
+	execute_process(COMMAND make WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK/build OUTPUT_VARIABLE cmd_res)
+	FOREACH(res ${cmd_res})
+		MESSAGE(${res})
+	ENDFOREACH()
+	
+	include_directories(
+		./
+		${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK/sdk_core/include
+	)
+	
+	link_directories(
+		./
+		${CMAKE_CURRENT_SOURCE_DIR}/Livox-SDK/build/sdk_core
+	)
 
-target_link_libraries(${PROJECT_HUB}_node
-    livox_sdk_static.a
-	${APR_LIBRARIES}
-#    ${PCL_LIBRARIES}
-	${catkin_LIBRARIES}
-    ${Boost_LIBRARIES}
-    -lrt
-  )
+	## add lidar project here
+	add_executable(${PROJECT_LIDAR}_node
+		${PROJECT_LIDAR_SRC}
+	)
+
+	add_dependencies(${PROJECT_LIDAR}_node ${PROJECT_NAME}_generate_messages_cpp)
+
+	target_link_libraries(${PROJECT_LIDAR}_node
+		livox_sdk_static.a
+		${APR_LIBRARIES}
+		${catkin_LIBRARIES}
+		${Boost_LIBRARIES}
+		-lrt
+	)
+
+	## add hub project here
+	add_executable(${PROJECT_HUB}_node
+		${PROJECT_HUB_SRC}
+	)
+
+	add_dependencies(${PROJECT_LIDAR}_node ${PROJECT_NAME}_generate_messages_cpp)
+
+	target_link_libraries(${PROJECT_HUB}_node
+		livox_sdk_static.a
+		${APR_LIBRARIES}
+		${catkin_LIBRARIES}
+		${Boost_LIBRARIES}
+		-lrt
+	)
+
+else()
+	message("find livox sdk library success")
+
+	## add lidar project here
+	add_executable(${PROJECT_LIDAR}_node
+		${PROJECT_LIDAR_SRC}
+	)
+
+	add_dependencies(${PROJECT_LIDAR}_node ${PROJECT_NAME}_generate_messages_cpp)
+
+	target_link_libraries(${PROJECT_LIDAR}_node
+		livox_sdk_static.a
+		${APR_LIBRARIES}
+		${catkin_LIBRARIES}
+		${Boost_LIBRARIES}
+		-lrt
+	)
+
+	## add hub project here
+	add_executable(${PROJECT_HUB}_node
+		${PROJECT_HUB_SRC}
+	)
+
+	add_dependencies(${PROJECT_HUB}_node ${PROJECT_NAME}_generate_messages_cpp)
+
+	target_link_libraries(${PROJECT_HUB}_node
+		livox_sdk_static.a
+		${APR_LIBRARIES}
+		${catkin_LIBRARIES}
+		${Boost_LIBRARIES}
+		-lrt
+	)
+
+endif()
 
 #############
 ## Install ##
