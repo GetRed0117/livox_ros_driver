@@ -368,7 +368,7 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
       *((float*)(point_base +  0)) = raw_points->x/1000.0f;
       *((float*)(point_base +  4)) = raw_points->y/1000.0f;
       *((float*)(point_base +  8)) = raw_points->z/1000.0f;
-      *((float*)(point_base + 12)) = (float) raw_points->reflectivity + (float) handle * 0.01;
+      *((float*)(point_base + 12)) = (float) raw_points->reflectivity + (float) handle * 0.001;
       ++raw_points;
       ++point_num;
       point_base += kPointXYZISize;
@@ -386,7 +386,7 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
   cloud.is_dense     = true;
   // adjust the real size
   cloud.data.resize(cloud.row_step);
-  // ROS_INFO("%ld", cloud.width);
+  ROS_INFO("%ld", cloud.width);
   cloud_pub.publish(cloud);
 
   return published_packet;
