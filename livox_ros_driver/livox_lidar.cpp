@@ -303,6 +303,27 @@ static uint32_t CalculatePacketQueueSize(uint32_t interval_ms, uint32_t device_t
   return queue_size;
 }
 
+bool CompareString(const char code1[kBroadcastCodeSize],const char code2[kBroadcastCodeSize])
+{
+  for (int i = 0; i < kBroadcastCodeSize; ++i)
+  {
+    if (code1[i] != code2[i])
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+int GetLidarRealID(const char code[kBroadcastCodeSize])
+{
+  for (int i = 0; i < total_broadcast_code.size(); ++i)
+  {
+      if(CompareString(code,total_broadcast_code[i].c_str()))
+      return i;
+  }
+}
+
 #if 0
 /* for pointcloud convert process */
 static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_num, \
@@ -407,6 +428,8 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
   cloud->header.frame_id = "livox_frame";
   cloud->height = 1;
   cloud->width  = 0;
+
+  int real_handle_id = GetLidarRealID(lidars[handle].info.broadcast_code) + 1;
   
   // add pointcloud
   StoragePacket storage_packet;
@@ -435,7 +458,7 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
       point.x = raw_points->x/1000.0f;
       point.y = raw_points->y/1000.0f;
       point.z = raw_points->z/1000.0f;
-      point.intensity = (float)raw_points->reflectivity;
+      point.intensity = (float)raw_points->reflectivity + (float) real_handle_id * 0.001;
       cloud->points.push_back(point);
   
       ++raw_points;
@@ -591,6 +614,7 @@ void PollPointcloudData(int msg_type) {
       }
     }
   }
+  std::cout<<'\n';
 }
 
 /** add bd to total_broadcast_code */
