@@ -115,6 +115,8 @@ typedef enum {
 /* for global publisher use */
 ros::Publisher cloud_pub;
 typedef pcl::PointCloud<pcl::PointXYZI> PointCloud;
+PointCloud::Ptr all_lidar_cloud_single_frame(new PointCloud());
+
 
 /* for device connect use ----------------------------------------------------------------------- */
 typedef enum {
@@ -132,8 +134,10 @@ typedef struct {
 } DeviceItem;
 
 DeviceItem lidars[kMaxLidarCount];
+DeviceItem hub;
 
-/* user add broadcast code here */
+
+/* user add hub broadcast code here */
 const char* broadcast_code_list[] = {
   "000000000000001",
 };
@@ -263,6 +267,9 @@ static uint64_t GetStoragePacketTimestamp(StoragePacket* packet) {
     time_utc.tm_min   = 0;
     time_utc.tm_sec   = 0;
 
+    //ROS_INFO("UTC:%d %d %d %d", time_utc.tm_year, time_utc.tm_mon,\
+    //           time_utc.tm_mday, time_utc.tm_hour);
+
     uint64_t time_epoch = mktime(&time_utc);
     time_epoch = time_epoch * 1000000 + *((uint32_t *)(&(raw_packet->timestamp[4]))); // to us
     time_epoch = time_epoch * 1000; // to ns
@@ -367,10 +374,10 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
     cloud.width += storage_packet.point_num;
 
     for (uint32_t i = 0; i < storage_packet.point_num; i++) {
-      *((float*)(point_base +  0)) = raw_points->x/1000.0f;
-      *((float*)(point_base +  4)) = raw_points->y/1000.0f;
-      *((float*)(point_base +  8)) = raw_points->z/1000.0f;
-      *((float*)(point_base + 12)) = (float) raw_points->reflectivity;
+      *((float*)(point_base +  0)) = raw_points->x/1000.0f; 
+      *((float*)(point_base +  4)) = raw_points->y/1000.0f; 
+      *((float*)(point_base +  8)) = raw_points->z/1000.0f; 
+      *((float*)(point_base + 12)) = (float) raw_points->reflectivity + (float) handle * 0.001;
       ++raw_points;
       ++point_num;
       point_base += kPointXYZISize;
@@ -382,12 +389,13 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
   }
   //ROS_INFO("%d", cloud.width);
 
+  cloud.header.stamp=ros::Time::now();
   cloud.row_step = cloud.width * cloud.point_step;
   cloud.is_bigendian = false;
   cloud.is_dense     = true;
   // adjust the real size
-  //cloud.data.resize(cloud.row_step);
-  //ROS_INFO("%ld", cloud.data.capacity());
+  cloud.data.resize(cloud.row_step);
+  ROS_INFO("%ld", cloud.width);
   cloud_pub.publish(cloud);
 
   return published_packet;
@@ -397,6 +405,7 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
 /* for pointcloud convert process */
 static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_num, \
                                    uint8_t handle) {
+
   uint64_t timestamp = 0;
   uint64_t last_timestamp = 0;
   uint32_t published_packet = 0;
@@ -435,7 +444,7 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
       point.x = raw_points->x/1000.0f;
       point.y = raw_points->y/1000.0f;
       point.z = raw_points->z/1000.0f;
-      point.intensity = (float)raw_points->reflectivity;
+      point.intensity = (float)raw_points->reflectivity + (float) handle * 0.001;
       cloud->points.push_back(point);
   
       ++raw_points;
@@ -450,15 +459,16 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
   //ROS_INFO("%ld", ptr_cloud->data.capacity());
   ROS_INFO("%ld", cloud->width);
 
-  sensor_msgs::PointCloud2 CloudROSMsg;
-  pcl::toROSMsg(*cloud, CloudROSMsg);
-  CloudROSMsg.header.stamp=ros::Time::now();
-  CloudROSMsg.header.frame_id = "livox_frame";
-  cloud_pub.publish(CloudROSMsg);
+  // sensor_msgs::PointCloud2 CloudROSMsg;
+  // CloudROSMsg.header.stamp=ros::Time::now();
+  // CloudROSMsg.header.frame_id = "livox_frame";
+  // pcl::toROSMsg(*cloud, CloudROSMsg);
+  // cloud_pub.publish(cloud);
+
+  *all_lidar_cloud_single_frame += *cloud;
 
   return published_packet;
 }
-
 
 /* for pointcloud convert process */
 static uint32_t PublishCustomPointcloud(StoragePacketQueue* queue, uint32_t packet_num,\
@@ -531,12 +541,19 @@ static void PointCloudConvert(LivoxPoint *p_dpoint, LivoxRawPoint *p_raw_point) 
   p_dpoint->reflectivity = p_raw_point->reflectivity;
 }
 
-void GetLidarData(uint8_t handle, LivoxEthPacket *data, uint32_t data_num, void *client_data) {
+void GetLidarData(uint8_t hub_handle, LivoxEthPacket *data, uint32_t data_num, void *client_data) {
   using namespace std;
+  LivoxEthPacket *lidar_pack = data;
 
-  LivoxEthPacket* lidar_pack = data;
 
-  if (!data || !data_num || (handle >= kMaxLidarCount)) {
+  if (!data || !data_num) {
+    return;
+  }
+
+  /* caculate which lidar this eth packet data belong to */
+  uint8_t handle = HubGetLidarHandle(lidar_pack->slot, lidar_pack->id);
+
+  if (handle >= kMaxLidarCount) {
     return;
   }
 
@@ -570,6 +587,8 @@ void GetLidarData(uint8_t handle, LivoxEthPacket *data, uint32_t data_num, void 
 }
 
 void PollPointcloudData(int msg_type) {
+  all_lidar_cloud_single_frame->clear();
+
   for (int i = 0; i < kMaxLidarCount; i++) {
       StoragePacketQueue *p_queue  = &lidars[i].packet_queue;
 
@@ -591,6 +610,14 @@ void PollPointcloudData(int msg_type) {
       }
     }
   }
+
+  sensor_msgs::PointCloud2 CloudROSMsg;
+  pcl::toROSMsg(*all_lidar_cloud_single_frame, CloudROSMsg);
+  CloudROSMsg.header.stamp = ros::Time::now();
+  CloudROSMsg.header.frame_id = "livox_frame";
+  ROS_INFO("%ld", CloudROSMsg.width);
+  cloud_pub.publish(CloudROSMsg);
+  std::cout<<'\n';
 }
 
 /** add bd to total_broadcast_code */
@@ -634,24 +661,25 @@ void AddCommandlineBroadcastCode(const char* cammandline_str) {
   delete [] strs;
 }
 
+/* control hub ---------------------------------------------------------------------------------- */
 
-/** Callback function of starting sampling. */
-void OnSampleCallback(uint8_t status, uint8_t handle, uint8_t response, void *data) {
-  ROS_INFO("OnSampleCallback statue %d handle %d response %d", status, handle, response);
+void OnSampleCallback(uint8_t status, uint8_t hub_handle, uint8_t response, void *data) {
+  ROS_INFO("OnSampleCallback statue %d handle %d response %d \n", status, hub_handle, response);
   if (status == kStatusSuccess) {
     if (response != 0) {
-      lidars[handle].device_state = kDeviceStateConnect;
+      hub.device_state = kDeviceStateConnect;
     }
   } else if (status == kStatusTimeout) {
-    lidars[handle].device_state = kDeviceStateConnect;
+    hub.device_state = kDeviceStateConnect;
   }
 }
 
 /** Callback function of stopping sampling. */
-void OnStopSampleCallback(uint8_t status, uint8_t handle, uint8_t response, void *data) {
+void OnStopSampleCallback(uint8_t status, uint8_t hub_handle, uint8_t response, void *data) {
+
 }
 
-/** Query the firmware version of Livox LiDAR. */
+/** Query the firmware version of Livox Hub. */
 void OnDeviceInformation(uint8_t status, uint8_t handle, DeviceInformationResponse *ack, void *data) {
   if (status != kStatusSuccess) {
     ROS_INFO("Device Query Informations Failed %d", status);
@@ -665,41 +693,71 @@ void OnDeviceInformation(uint8_t status, uint8_t handle, DeviceInformationRespon
   }
 }
 
-/** Callback function of changing of device state. */
+void OnHubLidarInfo(uint8_t status, uint8_t handle, HubQueryLidarInformationResponse *response, void *client_data) {
+  if (status != kStatusSuccess) {
+    printf("Device Query Informations Failed %d\n", status);
+  }
+  if (response) {
+    int i = 0;
+    for (i = 0; i < response->count; ++i) {
+      printf("Hub Lidar Info broadcast code %s id %d slot %d \n ",
+             response->device_info_list[i].broadcast_code,
+             response->device_info_list[i].id,
+             response->device_info_list[i].slot);
+    }
+  }
+}
+
 void OnDeviceChange(const DeviceInfo *info, DeviceEvent type) {
   if (info == NULL) {
     return;
   }
 
   ROS_INFO("OnDeviceChange broadcast code %s update type %d", info->broadcast_code, type);
-
-  uint8_t handle = info->handle;
-  if (handle >= kMaxLidarCount) {
+  uint8_t hub_handle = info->handle;
+  if (hub_handle >= kMaxLidarCount) {
     return;
   }
   if (type == kEventConnect) {
-    QueryDeviceInformation(handle, OnDeviceInformation, NULL);
-    if (lidars[handle].device_state == kDeviceStateDisconnect) {
-      lidars[handle].device_state = kDeviceStateConnect;
-      lidars[handle].info = *info;
+    DeviceInfo *_lidars = (DeviceInfo *) malloc(sizeof(DeviceInfo) * kMaxLidarCount);
+
+    uint8_t count = kMaxLidarCount;
+    uint8_t status = GetConnectedDevices(_lidars, &count);
+    if (status == kStatusSuccess) {
+      int i = 0;
+      for (i = 0; i < count; ++i) {
+        uint8_t handle = _lidars[i].handle;
+        if (handle < kMaxLidarCount) {
+          lidars[handle].handle = handle;
+          lidars[handle].info = _lidars[i];
+          lidars[handle].device_state = kDeviceStateSampling;
+          ROS_INFO("lidar %d : %s\r\n", _lidars[i].handle, _lidars[i].broadcast_code);
+        }
+      }
+    }
+    if (_lidars) {
+      free(_lidars);
+    }
+    if (info->type == kDeviceTypeHub) {
+      HubQueryLidarInformation(OnHubLidarInfo, NULL);
+    }
+    if (hub.device_state == kDeviceStateDisconnect) {
+      hub.device_state = kDeviceStateConnect;
+      hub.info = *info;
     }
   } else if (type == kEventDisconnect) {
-    lidars[handle].device_state = kDeviceStateDisconnect;
+    hub.device_state = kDeviceStateDisconnect;
   } else if (type == kEventStateChange) {
-    lidars[handle].info = *info;
+    hub.info = *info;
   }
 
-  if (lidars[handle].device_state == kDeviceStateConnect) {
-    ROS_INFO("Device State status_code %d", lidars[handle].info.status.status_code);
-    ROS_INFO("Device State working state %d", lidars[handle].info.state);
-    ROS_INFO("Device feature %d", lidars[handle].info.feature);
-    if (lidars[handle].info.state == kLidarStateNormal) {
-      if (lidars[handle].info.type == kDeviceTypeHub) {
-        HubStartSampling(OnSampleCallback, NULL);
-      } else {
-        LidarStartSampling(handle, OnSampleCallback, NULL);
-      }
-      lidars[handle].device_state = kDeviceStateSampling;
+  if (hub.device_state == kDeviceStateConnect) {
+    ROS_INFO("Device State status_code %d", hub.info.status.status_code);
+    ROS_INFO("Device State working state %d", hub.info.state);
+    ROS_INFO("Device feature %d", hub.info.feature);
+    if (hub.info.state == kLidarStateNormal) {
+      HubStartSampling(OnSampleCallback, NULL);
+      hub.device_state = kDeviceStateSampling;
     }
   }
 }
@@ -730,18 +788,19 @@ void OnDeviceBroadcast(const BroadcastDeviceInfo *info) {
   }
 
   bool result = false;
-  uint8_t handle = 0;
-  result = AddLidarToConnect(info->broadcast_code, &handle);
-  if (result == kStatusSuccess && handle < kMaxLidarCount) {
-    SetDataCallback(handle, GetLidarData, NULL);
-    lidars[handle].handle = handle;
-    lidars[handle].device_state = kDeviceStateDisconnect;
+  uint8_t hub_handle = 0;
+  result = AddHubToConnect(info->broadcast_code, &hub_handle);
+  if (result == kStatusSuccess && hub_handle < kMaxLidarCount) {
+    ROS_INFO("set callback");
+    SetDataCallback(hub_handle, GetLidarData, NULL);
+    hub.handle = hub_handle;
+    hub.device_state = kDeviceStateDisconnect;
   }
 }
 
 
 int main(int argc, char **argv) {
-  if(ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info)) {
+  if( ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info) ) {
     ros::console::notifyLoggerLevelsChanged();
   }
 
@@ -768,6 +827,7 @@ int main(int argc, char **argv) {
   }
 
   memset(lidars, 0, sizeof(lidars));
+  memset(&hub, 0, sizeof(hub));
   SetBroadcastCallback(OnDeviceBroadcast);
   SetDeviceStateUpdateCallback(OnDeviceChange);
 
@@ -777,17 +837,16 @@ int main(int argc, char **argv) {
   }
 
   /* ros related */
-  ros::init(argc, argv, "livox_lidar_publisher");
+  ros::init(argc, argv, "livox_hub_all_publisher");
   ros::NodeHandle livox_node;
 
   int msg_type;
   livox_node.getParam("livox_msg_type", msg_type);
   if (kPointCloud2Msg == msg_type) {
-    cloud_pub = livox_node.advertise<sensor_msgs::PointCloud2>("livox/lidar", \
-                                                       kMaxEthPacketQueueSize);
+    cloud_pub = livox_node.advertise<sensor_msgs::PointCloud2>("livox/hub_all", kMaxEthPacketQueueSize);
     ROS_INFO("Publish PointCloud2");
   } else {
-    cloud_pub = livox_node.advertise<livox_ros_driver::CustomMsg>("livox/lidar", \
+    cloud_pub = livox_node.advertise<livox_ros_driver::CustomMsg>("livox/hub", \
                                                        kMaxEthPacketQueueSize);
     ROS_INFO("Publish Livox Custom Msg");
   }

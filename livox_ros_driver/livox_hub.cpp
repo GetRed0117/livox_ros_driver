@@ -412,7 +412,7 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
   
   /* init point cloud data struct */
   PointCloud::Ptr cloud (new PointCloud);
-  // cloud->header.frame_id = "livox_frame";
+  cloud->header.frame_id = "livox_frame";
   cloud->height = 1;
   cloud->width  = 0;
   
@@ -459,10 +459,10 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
   ROS_INFO("%ld", cloud->width);
 
   sensor_msgs::PointCloud2 CloudROSMsg;
+  pcl::toROSMsg(*cloud, CloudROSMsg);
   CloudROSMsg.header.stamp=ros::Time::now();
   CloudROSMsg.header.frame_id = "livox_frame";
-  pcl::toROSMsg(*cloud, CloudROSMsg);
-  cloud_pub.publish(cloud);
+  cloud_pub.publish(CloudROSMsg);
 
   return published_packet;
 }

@@ -4,8 +4,10 @@ project(livox_ros_driver)
 
 set(PROJECT_LIDAR livox_lidar)
 set(PROJECT_HUB livox_hub)
+set(PROJECT_HUB_ALL livox_hub_all)
 set(PROJECT_LIDAR_SRC ./livox_lidar.cpp)
 set(PROJECT_HUB_SRC ./livox_hub.cpp)
+set(PROJECT_HUB_ALL_SRC ./livox_hub_all.cpp)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -238,9 +240,24 @@ if((NOT LIVOX_SDK_LIBRARY) OR (NOT EXISTS ${LIVOX_SDK_LIBRARY}))
 		${PROJECT_HUB_SRC}
 	)
 
-	add_dependencies(${PROJECT_LIDAR}_node ${PROJECT_NAME}_generate_messages_cpp)
+	add_dependencies(${PROJECT_HUB}_node ${PROJECT_NAME}_generate_messages_cpp)
 
 	target_link_libraries(${PROJECT_HUB}_node
+		livox_sdk_static.a
+		${APR_LIBRARIES}
+		${catkin_LIBRARIES}
+		${Boost_LIBRARIES}
+		-lrt
+	)
+
+	## add hub all project here
+	add_executable(${PROJECT_HUB_ALL}_node
+		${PROJECT_HUB_ALL_SRC}
+	)
+
+	add_dependencies(${PROJECT_HUB_ALL}_node ${PROJECT_NAME}_generate_messages_cpp)
+
+	target_link_libraries(${PROJECT_HUB_ALL}_node
 		livox_sdk_static.a
 		${APR_LIBRARIES}
 		${catkin_LIBRARIES}
@@ -274,6 +291,21 @@ else()
 	add_dependencies(${PROJECT_HUB}_node ${PROJECT_NAME}_generate_messages_cpp)
 
 	target_link_libraries(${PROJECT_HUB}_node
+		livox_sdk_static.a
+		${APR_LIBRARIES}
+		${catkin_LIBRARIES}
+		${Boost_LIBRARIES}
+		-lrt
+	)
+
+	## add hub all project here
+	add_executable(${PROJECT_HUB_ALL}_node
+		${PROJECT_HUB_ALL_SRC}
+	)
+
+	add_dependencies(${PROJECT_HUB_ALL}_node ${PROJECT_NAME}_generate_messages_cpp)
+
+	target_link_libraries(${PROJECT_HUB_ALL}_node
 		livox_sdk_static.a
 		${APR_LIBRARIES}
 		${catkin_LIBRARIES}
