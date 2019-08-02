@@ -1,6 +1,6 @@
 <launch>
 	
-    <arg name="bd_list" default="100000000000000"/>
+    <arg name="bd_list" default="1LVDG19006YRE31&amp;1LVDG19006YRE32&amp;1LVDG19006YRE33&amp;1LVDFCE00504651&amp;1LVDFCE00504652&amp;1LVDFCE00504653&amp;1LVDFCE00504411&amp;1LVDFCE00504412&amp;1LVDFCE00504413&amp;1LVDG1S00655051&amp;1LVDG1S00655052&amp;1LVDG1S00655053"/>
     <param name="livox_msg_type" value="0"/>
 
     <node name="livox_lidar_publisher" pkg="livox_ros_driver" 
